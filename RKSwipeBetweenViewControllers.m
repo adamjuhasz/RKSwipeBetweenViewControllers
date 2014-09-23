@@ -5,7 +5,6 @@
 //  Created by Richard Kim on 7/24/14.
 //  Copyright (c) 2014 Richard Kim. All rights reserved.
 //
-//  @cwRichardKim for regular updates
 
 #import "RKSwipeBetweenViewControllers.h"
 
@@ -32,6 +31,7 @@
 @synthesize viewControllerArray;
 @synthesize selectionBar;
 @synthesize panGestureRecognizer;
+@synthesize manualSelectionBar;
 @synthesize pageController;
 @synthesize navigationView;
 @synthesize buttonText;
@@ -49,8 +49,8 @@
 {
     [super viewDidLoad];
 
-    self.navigationBar.barTintColor = [UIColor colorWithRed:0.01 green:0.05 blue:0.06 alpha:1]; //%%% bartint
-    self.navigationBar.translucent = NO;
+    //self.navigationBar.barTintColor = [UIColor colorWithRed:0.01 green:0.05 blue:0.06 alpha:1]; //%%% bartint
+    //self.navigationBar.translucent = NO;
     viewControllerArray = [[NSMutableArray alloc]init];
     currentPageIndex = 0;
 }
@@ -85,8 +85,8 @@
         [navigationView addSubview:button];
         
         button.tag = i; //%%% IMPORTANT: if you make your own custom buttons, you have to tag them appropriately
-        button.backgroundColor = [UIColor colorWithRed:0.03 green:0.07 blue:0.08 alpha:1];//%%% buttoncolors
-        
+        button.backgroundColor = [UIColor colorWithRed:0.03 green:0.07 blue:0.08 alpha:0];//%%% buttoncolors
+        [button setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
         [button addTarget:self action:@selector(tapSegmentButtonAction:) forControlEvents:UIControlEventTouchUpInside];
         
         [button setTitle:[buttonText objectAtIndex:i] forState:UIControlStateNormal]; //%%%buttontitle
@@ -130,9 +130,15 @@
 -(void)setupSelector
 {
     selectionBar = [[UIView alloc]initWithFrame:CGRectMake(X_BUFFER-X_OFFSET, SELECTOR_Y_BUFFER,(self.view.frame.size.width-2*X_BUFFER)/[viewControllerArray count], SELECTOR_HEIGHT)];
-    selectionBar.backgroundColor = [UIColor greenColor]; //%%% sbcolor
+    selectionBar.backgroundColor = [UIColor blackColor]; //%%% sbcolor
     selectionBar.alpha = 0.8; //%%% sbalpha
     [navigationView addSubview:selectionBar];
+    
+    manualSelectionBar = [[UIView alloc]initWithFrame:selectionBar.frame];
+    manualSelectionBar.backgroundColor = [UIColor blackColor]; //%%% sbcolor (moving)
+    manualSelectionBar.alpha = 0.5; //%%% msbalpha
+    manualSelectionBar.hidden = YES;
+    [self.navigationBar addSubview:manualSelectionBar];
 }
 
 //                                                        //
@@ -181,67 +187,58 @@
 }
 
 
-//                                                        //
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%//
-//%%%%%%%%%%%%%%%%%%        SETUP       %%%%%%%%%%%%%%%%%%//
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%//
-////////////////////////////////////////////////////////////
-
-
-
-
-//%%% methods called when you tap a button or scroll through the pages
-// generally shouldn't touch this unless you know what you're doing or
-// have a particular performance thing in mind
-//////////////////////////////////////////////////////////
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%//
-//%%%%%%%%%%%%%%%        MOVEMENT         %%%%%%%%%%%%%%//
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%//
-//                                                      //
-
 //%%% when you tap one of the buttons, it shows that page,
 //but it also has to animate the other pages to make it feel like you're crossing a 2d expansion,
 //so there's a loop that shows every view controller in the array up to the one you selected
 //eg: if you're on page 1 and you click tab 3, then it shows you page 2 and then page 3
 -(void)tapSegmentButtonAction:(UIButton *)button
 {
+    selectionBar.hidden = YES;
+    manualSelectionBar.frame = selectionBar.frame;
+    manualSelectionBar.hidden = NO;
     NSInteger tempIndex = currentPageIndex;
+    currentPageIndex = button.tag;
     
-    __weak typeof(self) weakSelf = self;
-    
-    //%%% check to see if you're going left -> right or right -> left
+    [self animateToIndex:button.tag];
     if (button.tag > tempIndex) {
-        
-        //%%% scroll through all the objects between the two points
         for (int i = (int)tempIndex+1; i<=button.tag; i++) {
-            [pageController setViewControllers:@[[viewControllerArray objectAtIndex:i]] direction:UIPageViewControllerNavigationDirectionForward animated:YES completion:^(BOOL complete){
-                
-                //%%% if the action finishes scrolling (i.e. the user doesn't stop it in the middle),
-                //then it updates the page that it's currently on
-                if (complete) {
-                    [weakSelf updateCurrentPageIndex:i];
-                }
-            }];
+            [pageController setViewControllers:@[[viewControllerArray objectAtIndex:i]] direction:UIPageViewControllerNavigationDirectionForward animated:YES completion:nil];
         }
-    }
-    
-    //%%% this is the same thing but for going right -> left
-    else if (button.tag < tempIndex) {
+    } else if (button.tag < tempIndex) {
         for (int i = (int)tempIndex-1; i >= button.tag; i--) {
-            [pageController setViewControllers:@[[viewControllerArray objectAtIndex:i]] direction:UIPageViewControllerNavigationDirectionReverse animated:YES completion:^(BOOL complete){
-                if (complete) {
-                    [weakSelf updateCurrentPageIndex:i];
-                }
-            }];
+            [pageController setViewControllers:@[[viewControllerArray objectAtIndex:i]] direction:UIPageViewControllerNavigationDirectionReverse animated:YES completion:nil];
         }
     }
 }
 
-//%%% makes sure the nav bar is always aware of what page you're on
-//in reference to the array of view controllers you gave
--(void)updateCurrentPageIndex:(int)newIndex
+//%%% This is a safety measure to pull the selector on the the correct tab just in case it goes awry
+-(void)settleSelectionBar:(NSInteger)index
 {
-    currentPageIndex = newIndex;
+    NSInteger numPages = [viewControllerArray count];
+    NSInteger xCoor = X_BUFFER+((self.view.frame.size.width-2*X_BUFFER)/numPages*index)-X_OFFSET;
+    
+    [UIView animateWithDuration:ANIMATION_SPEED animations:^{
+        selectionBar.frame = CGRectMake(xCoor, selectionBar.frame.origin.y, selectionBar.frame.size.width, selectionBar.frame.size.height);
+    }];
+}
+
+//%%% when you tap a button, this hides the current selection bar and shows the background bar.
+//then, it animages it to the correct page and then shows the correct bar again.
+//The reason why there are two bars is because when you tap a button,
+//the bar actually glitches out a little bit, so this prevents that
+-(void)animateToIndex:(NSInteger)index
+{
+    NSInteger numPages = [viewControllerArray count];
+    NSInteger xCoor = X_BUFFER+((self.view.frame.size.width-2*X_BUFFER)/numPages*index)-X_OFFSET;
+    
+    [UIView animateWithDuration:ANIMATION_SPEED*2.5 animations:^{
+        manualSelectionBar.frame = CGRectMake(xCoor+X_OFFSET, selectionBar.frame.origin.y, selectionBar.frame.size.width, selectionBar.frame.size.height);
+    }
+                     completion:^(BOOL finished){
+                         selectionBar.frame = manualSelectionBar.frame;
+                         selectionBar.hidden = NO;
+                         manualSelectionBar.hidden = YES;
+                     }];
 }
 
 //%%% method is called when any of the pages moves.
@@ -249,20 +246,32 @@
 -(void)scrollViewDidScroll:(UIScrollView *)scrollView
 {
     CGFloat xFromCenter = self.view.frame.size.width-pageScrollView.contentOffset.x; //%%% positive for right swipe, negative for left
-    
-    //%%% checks to see what page you are on and adjusts the xCoor accordingly.
-    //i.e. if you're on the second page, it makes sure that the bar starts from the frame.origin.x of the
-    //second tab instead of the beginning
-    NSInteger xCoor = X_BUFFER+selectionBar.frame.size.width*currentPageIndex-X_OFFSET;
-    
-    selectionBar.frame = CGRectMake(xCoor-xFromCenter/[viewControllerArray count], selectionBar.frame.origin.y, selectionBar.frame.size.width, selectionBar.frame.size.height);
+    NSInteger xCoor = X_BUFFER+selectionBar.frame.size.width*currentPageIndex -X_OFFSET;
+    if (xFromCenter == 0) {
+        [self settleSelectionBar:currentPageIndex];
+    } else {
+        selectionBar.frame = CGRectMake(xCoor-xFromCenter/[viewControllerArray count], selectionBar.frame.origin.y, selectionBar.frame.size.width, selectionBar.frame.size.height);
+    }
 }
 
-//                                                      //
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%//
-//%%%%%%%%%%%%%%%         MOVEMENT         %%%%%%%%%%%%%//
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%//
-//////////////////////////////////////////////////////////
+//%%% checks to see which item we are currently looking at from the array of view controllers
+-(NSInteger)indexOfController:(UIViewController *)viewController
+{
+    for (int i = 0; i<[viewControllerArray count]; i++) {
+        if (viewController == [viewControllerArray objectAtIndex:i])
+        {
+            return i;
+        }
+    }
+    return NSNotFound;
+}
+
+
+//                                                        //
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%//
+//%%%%%%%%%%%%%%%%%%        SETUP       %%%%%%%%%%%%%%%%%%//
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%//
+////////////////////////////////////////////////////////////
 
 
 
@@ -316,20 +325,6 @@
     if (completed) {
         currentPageIndex = [self indexOfController:[pageViewController.viewControllers lastObject]];
     }
-}
-
-
-//%%% checks to see which item we are currently looking at from the array of view controllers.
-// not really a delegate method, but is used in all the delegate methods, so might as well include it here
--(NSInteger)indexOfController:(UIViewController *)viewController
-{
-    for (int i = 0; i<[viewControllerArray count]; i++) {
-        if (viewController == [viewControllerArray objectAtIndex:i])
-        {
-            return i;
-        }
-    }
-    return NSNotFound;
 }
 
 //
