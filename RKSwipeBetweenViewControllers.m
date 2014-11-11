@@ -10,8 +10,8 @@
 
 //%%% customizeable button attributes
 #define X_BUFFER 0 //%%% the number of pixels on either side of the segment
-#define Y_BUFFER 14 //%%% number of pixels on top of the segment
-#define HEIGHT 30 //%%% height of the segment
+#define Y_BUFFER 0 //%%% number of pixels on top of the segment
+#define HEIGHT 40 //%%% height of the segment
 
 //%%% customizeable selector bar attributes (the black bar under the buttons)
 #define ANIMATION_SPEED 0.2 //%%% the number of seconds it takes to complete the animation
@@ -41,6 +41,8 @@
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (self) {
         // Custom initialization
+        _activeColor = [UIColor blackColor];
+        _inactiveColor = [UIColor blackColor];
     }
     return self;
 }
@@ -88,8 +90,10 @@
         button.backgroundColor = [UIColor colorWithRed:0.03 green:0.07 blue:0.08 alpha:0];//%%% buttoncolors
         [button setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
         [button addTarget:self action:@selector(tapSegmentButtonAction:) forControlEvents:UIControlEventTouchUpInside];
-        
-        [button setTitle:[buttonText objectAtIndex:i] forState:UIControlStateNormal]; //%%%buttontitle
+        NSDictionary *attributes = @{ NSFontAttributeName : [UIFont fontWithName:@"HelveticaNeue-Thin" size:16],
+                                      NSForegroundColorAttributeName : self.activeColor};
+        NSAttributedString *buttonStrng = [[NSAttributedString alloc] initWithString:[buttonText objectAtIndex:i] attributes:attributes];
+        [button setAttributedTitle:buttonStrng forState:UIControlStateNormal];
     }
     
     pageController.navigationController.navigationBar.topItem.titleView = navigationView;
@@ -130,12 +134,12 @@
 -(void)setupSelector
 {
     selectionBar = [[UIView alloc]initWithFrame:CGRectMake(X_BUFFER-X_OFFSET, SELECTOR_Y_BUFFER,(self.view.frame.size.width-2*X_BUFFER)/[viewControllerArray count], SELECTOR_HEIGHT)];
-    selectionBar.backgroundColor = [UIColor blackColor]; //%%% sbcolor
+    selectionBar.backgroundColor = self.activeColor; //%%% sbcolor
     selectionBar.alpha = 0.8; //%%% sbalpha
     [navigationView addSubview:selectionBar];
     
     manualSelectionBar = [[UIView alloc]initWithFrame:selectionBar.frame];
-    manualSelectionBar.backgroundColor = [UIColor blackColor]; //%%% sbcolor (moving)
+    manualSelectionBar.backgroundColor = self.activeColor; //%%% sbcolor (moving)
     manualSelectionBar.alpha = 0.5; //%%% msbalpha
     manualSelectionBar.hidden = YES;
     [self.navigationBar addSubview:manualSelectionBar];
@@ -211,6 +215,22 @@
     }
 }
 
+- (void)colorIndex:(NSInteger)index
+{
+    for (UIButton *button in navigationView.subviews) {
+        if ([button isKindOfClass:UIButton.class]) {
+            NSMutableAttributedString *text = [[button attributedTitleForState:UIControlStateNormal] mutableCopy];
+            NSRange range = {0, text.length};
+            if (button.tag == index) {
+                [text addAttribute:NSForegroundColorAttributeName value:self.activeColor range:range];
+            } else {
+                [text addAttribute:NSForegroundColorAttributeName value:self.inactiveColor range:range];
+            }
+            [button setAttributedTitle:text forState:UIControlStateNormal];
+        }
+    }
+}
+
 //%%% This is a safety measure to pull the selector on the the correct tab just in case it goes awry
 -(void)settleSelectionBar:(NSInteger)index
 {
@@ -219,6 +239,8 @@
     
     [UIView animateWithDuration:ANIMATION_SPEED animations:^{
         selectionBar.frame = CGRectMake(xCoor, selectionBar.frame.origin.y, selectionBar.frame.size.width, selectionBar.frame.size.height);
+    } completion:^(BOOL finished) {
+        [self colorIndex:index];
     }];
 }
 
@@ -238,6 +260,7 @@
                          selectionBar.frame = manualSelectionBar.frame;
                          selectionBar.hidden = NO;
                          manualSelectionBar.hidden = YES;
+                         [self colorIndex:index];
                      }];
 }
 

@@ -174,5 +174,7 @@
 @property (nonatomic, strong)UIPageViewController *pageController;
 @property (nonatomic, strong)UIView *navigationView;
 @property (nonatomic, strong)NSArray *buttonText;
+@property UIColor *activeColor;
+@property UIColor *inactiveColor;
 
 @end
